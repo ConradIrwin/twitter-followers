@@ -2,7 +2,9 @@ package main
 
 import (
 	"encoding/json"
+	"flag"
 	"fmt"
+	"io/ioutil"
 	"net/url"
 	"os"
 	"time"
@@ -30,8 +32,14 @@ func main() {
 		os.Exit(1)
 	}
 
-	if len(os.Args) != 2 || os.Args[1] == "-h" || os.Args[1] == "--help" {
-		fmt.Println("Usage: twitter-followers <screen_name>")
+	cursorFile := flag.String("cursor-file", "", "a file to save the state of the cursor in")
+	flag.Parse()
+
+	args := flag.Args()
+
+	if len(args) != 1 {
+		fmt.Printf("%#v", args)
+		fmt.Println("Usage: twitter-followers [ --cursor-file .cursor] <screen_name>")
 		os.Exit(1)
 	}
 
@@ -39,11 +47,20 @@ func main() {
 	anaconda.SetConsumerSecret(os.Getenv("TWITTER_CONSUMER_SECRET"))
 	client := anaconda.NewTwitterApi(os.Getenv("TWITTER_ACCESS_KEY"), os.Getenv("TWITTER_ACCESS_SECRET"))
 
+	cursorStr := "-1"
+
+	if *cursorFile != "" {
+		bytes, err := ioutil.ReadFile(*cursorFile)
+		if err == nil {
+			cursorStr = string(bytes)
+		}
+	}
+
 	v := url.Values{}
-	v.Set("screen_name", os.Args[1])
+	v.Set("screen_name", args[0])
 	v.Set("count", "200")
 	v.Set("skip_status", "true")
-	v.Set("cursor", "-1")
+	v.Set("cursor", cursorStr)
 
 	cursor, err := client.GetFollowersList(v)
 	if err != nil {
@@ -66,7 +83,15 @@ func main() {
 			time.Sleep(70 * time.Second / time.Duration(len(cursor.Users)))
 		}
 
+		if *cursorFile != "" {
+			err := ioutil.WriteFile(*cursorFile, []byte(cursor.Next_cursor_str), 0666)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "writing to cursor file failed: %v %v", cursor.Next_cursor_str, err)
+			}
+		}
+
 		v.Set("cursor", cursor.Next_cursor_str)
+
 		cursor, err = client.GetFollowersList(v)
 		if err != nil {
 			panic(err)
