@@ -94,7 +94,11 @@ func main() {
 
 		cursor, err = client.GetFollowersList(v)
 		if err != nil {
-			panic(err)
+			time.Sleep(10 * time.Second)
+			cursor, err = client.GetFollowersList(v)
+			if err != nil {
+				panic(err)
+			}
 		}
 	}
 
